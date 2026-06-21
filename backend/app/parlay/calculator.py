@@ -3,7 +3,7 @@ from ..data_collector.collector import get_recent_form, get_team_info
 
 
 def calculate_single_parlay(selections: list[dict]) -> dict:
-    combined_prob = 100.0
+    combined_prob = 1.0
     total_expected_value = 0.0
     details = []
 

@@ -109,23 +109,22 @@ def get_team_info(team_name: str) -> dict:
     return WORLD_CUP_TEAMS.get(team_name, {"rank": 50, "group": "Unknown"})
 
 
+import hashlib
+
+
+def _deterministic_seed(team: str) -> float:
+    hash_bytes = hashlib.md5(team.encode()).digest()
+    return int.from_bytes(hash_bytes[:4], "little") / (2**32)
+
+
 def get_recent_form(team: str) -> dict:
+    seed = _deterministic_seed(team)
     return {
-        "avg_goals_scored": round(_random_between(0.5, 2.5), 2),
-        "avg_goals_conceded": round(_random_between(0.3, 2.0), 2),
-        "wins_last_5": _random_int(1, 4),
-        "draws_last_5": _random_int(0, 2),
-        "losses_last_5": _random_int(0, 3),
-        "btts_percentage": round(_random_between(30, 70), 1),
-        "over_25_percentage": round(_random_between(40, 75), 1),
+        "avg_goals_scored": round(0.5 + (2.5 - 0.5) * ((seed * 7) % 1), 2),
+        "avg_goals_conceded": round(0.3 + (2.0 - 0.3) * ((seed * 13) % 1), 2),
+        "wins_last_5": int(1 + 4 * ((seed * 11) % 1)),
+        "draws_last_5": int(2 * ((seed * 17) % 1)),
+        "losses_last_5": int(3 * ((seed * 19) % 1)),
+        "btts_percentage": round(30 + 40 * ((seed * 23) % 1), 1),
+        "over_25_percentage": round(40 + 35 * ((seed * 29) % 1), 1),
     }
-
-
-def _random_between(a: float, b: float) -> float:
-    import random
-    return a + (b - a) * random.random()
-
-
-def _random_int(a: int, b: int) -> int:
-    import random
-    return random.randint(a, b)
