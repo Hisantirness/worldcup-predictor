@@ -46,3 +46,6 @@ class EloPredictor:
             actual = 0.0
 
         self.ratings[team] = rating_team + self.K_FACTOR * (actual - expected)
+
+
+elo = EloPredictor()

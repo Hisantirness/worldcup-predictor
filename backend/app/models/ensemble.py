@@ -1,11 +1,10 @@
 from .basic_stats import BasicStatsPredictor
 from .poisson import PoissonPredictor
-from .elo import EloPredictor
+from .elo import elo
 from .random_forest import RandomForestPredictor
 
 basic_stats = BasicStatsPredictor()
 poisson = PoissonPredictor()
-elo = EloPredictor()
 random_forest = RandomForestPredictor()
 
 WEIGHTS = {
@@ -96,3 +95,11 @@ def _get_safest_pick(home: float, draw: float, away: float) -> tuple:
 
 def get_feature_importance() -> list[dict]:
     return random_forest.get_feature_importance()
+
+
+def get_weights() -> dict:
+    return dict(WEIGHTS)
+
+
+def set_weights(new_weights: dict):
+    WEIGHTS.update(new_weights)

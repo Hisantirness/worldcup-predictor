@@ -88,3 +88,22 @@ async def team_info(team_name: str):
 @router.get("/model/feature-importance")
 async def feature_importance():
     return {"features": get_feature_importance()}
+
+
+@router.get("/model/weights")
+async def model_weights():
+    from ..models.calibration import evaluate_on_finished_matches, calibrate_weights
+    from ..data_collector.collector import get_matches
+    matches = await get_matches()
+    finished = [m for m in matches if m.get("status") == "finished" and m.get("score")]
+    if finished:
+        eval_results = evaluate_on_finished_matches(finished)
+        calibrated = calibrate_weights(eval_results)
+    else:
+        eval_results = {}
+        calibrated = {}
+    return {
+        "current_weights": get_weights(),
+        "calibrated_weights": calibrated,
+        "model_accuracy": eval_results,
+    }
