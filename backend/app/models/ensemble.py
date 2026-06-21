@@ -1,33 +1,52 @@
 from .basic_stats import BasicStatsPredictor
 from .poisson import PoissonPredictor
 from .elo import EloPredictor
+from .random_forest import RandomForestPredictor
 
 basic_stats = BasicStatsPredictor()
 poisson = PoissonPredictor()
 elo = EloPredictor()
+random_forest = RandomForestPredictor()
 
 WEIGHTS = {
-    "basic_stats": 0.30,
-    "poisson": 0.40,
-    "elo": 0.30,
+    "basic_stats": 0.20,
+    "poisson": 0.30,
+    "elo": 0.25,
+    "random_forest": 0.25,
 }
+
+_model_initialized = False
+
+
+def _ensure_models_ready():
+    global _model_initialized
+    if not _model_initialized:
+        if not random_forest.is_trained:
+            random_forest.train()
+        _model_initialized = True
 
 
 def predict_match(home: str, away: str, home_form: dict, away_form: dict,
                   home_rank: int, away_rank: int) -> dict:
+    _ensure_models_ready()
+
     bs = basic_stats.predict(home, away, home_form, away_form, home_rank, away_rank)
     ps = poisson.predict(home_form, away_form)
     el = elo.predict(home, away, home_rank, away_rank)
+    rf = random_forest.predict(home_form, away_form, home_rank, away_rank)
 
     home_prob = (bs["home"] * WEIGHTS["basic_stats"]
                  + ps["home"] * WEIGHTS["poisson"]
-                 + el["home"] * WEIGHTS["elo"])
+                 + el["home"] * WEIGHTS["elo"]
+                 + rf["home"] * WEIGHTS["random_forest"])
     draw_prob = (bs["draw"] * WEIGHTS["basic_stats"]
                  + ps["draw"] * WEIGHTS["poisson"]
-                 + el["draw"] * WEIGHTS["elo"])
+                 + el["draw"] * WEIGHTS["elo"]
+                 + rf["draw"] * WEIGHTS["random_forest"])
     away_prob = (bs["away"] * WEIGHTS["basic_stats"]
                  + ps["away"] * WEIGHTS["poisson"]
-                 + el["away"] * WEIGHTS["elo"])
+                 + el["away"] * WEIGHTS["elo"]
+                 + rf["away"] * WEIGHTS["random_forest"])
 
     total = home_prob + draw_prob + away_prob
     home_prob = home_prob / total * 100
@@ -37,13 +56,13 @@ def predict_match(home: str, away: str, home_form: dict, away_form: dict,
     btts = (
         basic_stats.predict_btts(home_form, away_form) * WEIGHTS["basic_stats"]
         + ps["btts"] * WEIGHTS["poisson"]
-        + basic_stats.predict_btts(home_form, away_form) * WEIGHTS["elo"]
+        + basic_stats.predict_btts(home_form, away_form) * (WEIGHTS["elo"] + WEIGHTS["random_forest"])
     )
 
     over_25 = (
         basic_stats.predict_over_25(home_form, away_form) * WEIGHTS["basic_stats"]
         + ps["over_25"] * WEIGHTS["poisson"]
-        + basic_stats.predict_over_25(home_form, away_form) * WEIGHTS["elo"]
+        + basic_stats.predict_over_25(home_form, away_form) * (WEIGHTS["elo"] + WEIGHTS["random_forest"])
     )
 
     pick, confidence = _get_safest_pick(home_prob, draw_prob, away_prob)
@@ -64,6 +83,7 @@ def predict_match(home: str, away: str, home_form: dict, away_form: dict,
             "basic_stats": bs,
             "poisson": {"home": ps["home"], "draw": ps["draw"], "away": ps["away"]},
             "elo": el,
+            "random_forest": rf,
         },
     }
 
@@ -72,3 +92,7 @@ def _get_safest_pick(home: float, draw: float, away: float) -> tuple:
     picks = [("1", home), ("X", draw), ("2", away)]
     safest = max(picks, key=lambda x: x[1])
     return safest[0], safest[1]
+
+
+def get_feature_importance() -> list[dict]:
+    return random_forest.get_feature_importance()

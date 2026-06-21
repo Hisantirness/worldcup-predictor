@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 from ..data_collector.collector import get_matches, get_recent_form, get_team_info, SAMPLE_MATCHES
-from ..models.ensemble import predict_match
+from ..models.ensemble import predict_match, get_feature_importance
 from ..parlay.calculator import calculate_single_parlay, get_safest_parlays
 
 router = APIRouter()
@@ -80,3 +80,8 @@ async def team_info(team_name: str):
     form = get_recent_form(team_name)
     info = get_team_info(team_name)
     return {"team": team_name, "form": form, "info": info}
+
+
+@router.get("/model/feature-importance")
+async def feature_importance():
+    return {"features": get_feature_importance()}
