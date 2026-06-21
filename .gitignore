@@ -21,3 +21,7 @@ Thumbs.db
 # Project
 *.db
 *.sqlite
+_data_cache/
+*.coverage
+_out.txt
+_err.txt

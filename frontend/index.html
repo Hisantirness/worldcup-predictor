@@ -9,11 +9,14 @@
 <body>
     <nav class="navbar">
         <div class="nav-container">
-            <h1 class="nav-title">⚽ Mundial 2026 — Predictor</h1>
-            <div class="nav-links">
+            <h1 class="nav-title">🏆 Mundial 2026 — Predictor</h1>
+            <button class="hamburger" id="hamburgerBtn" aria-label="Menú">☰</button>
+            <div class="nav-links" id="navLinks">
                 <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+                <button class="nav-btn" data-tab="detalles">Detalles</button>
                 <button class="nav-btn" data-tab="parlay">Parlay Builder</button>
                 <button class="nav-btn" data-tab="safest">Picks Seguros</button>
+                <button class="nav-btn" data-tab="markets">Mercados</button>
                 <button class="nav-btn" data-tab="models">Modelos</button>
             </div>
         </div>
@@ -23,6 +26,8 @@
         ⚠ Error de conexión — verifica que el backend esté corriendo
         <button onclick="checkConnection()">Reintentar</button>
     </div>
+
+    <div id="toastContainer" class="toast-container"></div>
 
     <main class="container">
         <section id="tab-dashboard" class="tab-content active">
@@ -39,11 +44,61 @@
                     <option value="F">Grupo F</option>
                     <option value="G">Grupo G</option>
                     <option value="H">Grupo H</option>
+                    <option value="I">Grupo I</option>
+                    <option value="J">Grupo J</option>
+                    <option value="K">Grupo K</option>
+                    <option value="L">Grupo L</option>
                 </select>
+                <div class="sort-group">
+                    <span class="sort-label">Orden:</span>
+                    <select id="sortFilter" class="filter-select" style="min-width:100px">
+                        <option value="confidence-desc">Confianza ↓</option>
+                        <option value="date">Fecha ↑</option>
+                        <option value="team">Equipo A-Z</option>
+                    </select>
+                </div>
                 <button id="refreshBtn" class="btn-icon" title="Actualizar">⟳</button>
             </div>
             <div id="matchesContainer" class="matches-grid">
                 <div class="loading">Cargando partidos...</div>
+            </div>
+        </section>
+
+        <section id="tab-detalles" class="tab-content">
+            <h2>Predicciones Detalladas por Modelo</h2>
+            <p class="section-desc">
+                Compara cómo cada modelo evalúa cada partido.
+                <span class="info-icon">?
+                    <span class="info-tooltip">Cada columna muestra las probabilidades 1X2 de un modelo. La barra indica la confianza en el resultado más probable.</span>
+                </span>
+            </p>
+            <div class="filters">
+                <select id="detailGroupFilter" class="filter-select">
+                    <option value="all">Todos los grupos</option>
+                    <option value="A">Grupo A</option>
+                    <option value="B">Grupo B</option>
+                    <option value="C">Grupo C</option>
+                    <option value="D">Grupo D</option>
+                    <option value="E">Grupo E</option>
+                    <option value="F">Grupo F</option>
+                    <option value="G">Grupo G</option>
+                    <option value="H">Grupo H</option>
+                    <option value="I">Grupo I</option>
+                    <option value="J">Grupo J</option>
+                    <option value="K">Grupo K</option>
+                    <option value="L">Grupo L</option>
+                </select>
+                <div class="sort-group">
+                    <span class="sort-label">Orden:</span>
+                    <select id="detailSortFilter" class="filter-select" style="min-width:100px">
+                        <option value="confidence-desc">Confianza ↓</option>
+                        <option value="date">Fecha ↑</option>
+                        <option value="team">Equipo A-Z</option>
+                    </select>
+                </div>
+            </div>
+            <div id="detailsContainer" class="details-grid">
+                <div class="loading">Cargando predicciones detalladas...</div>
             </div>
         </section>
 
@@ -74,6 +129,22 @@
             <div id="safestContainer">
                 <div class="loading">Calculando combinaciones...</div>
             </div>
+        </section>
+
+        <section id="tab-markets" class="tab-content">
+            <h2>Mercados Estadísticos</h2>
+            <p class="section-desc">
+                Probabilidades para mercados de estadísticas (córners, tarjetas, tiros) basadas en el perfil de cada selección.
+                <span class="info-icon">?
+                    <span class="info-tooltip">Usamos distribución Poisson con promedios históricos de cada equipo para calcular O/U en cada mercado.</span>
+                </span>
+            </p>
+            <div class="markets-controls">
+                <button id="loadMarketsBtn" class="btn-primary">Cargar Mercados</button>
+                <button id="buildStatParlayBtn" class="btn-secondary">🎲 Parlay Estadístico Seguro</button>
+            </div>
+            <div id="marketsContainer" class="markets-grid"></div>
+            <div id="statParlayResult" class="result-card" style="display:none"></div>
         </section>
 
         <section id="tab-models" class="tab-content">
