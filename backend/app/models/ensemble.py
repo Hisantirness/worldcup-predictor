@@ -37,7 +37,7 @@ def predict_match(home: str, away: str, home_form: dict, away_form: dict,
     btts = (
         basic_stats.predict_btts(home_form, away_form) * WEIGHTS["basic_stats"]
         + ps["btts"] * WEIGHTS["poisson"]
-        + bs.predict_btts(home_form, away_form) * WEIGHTS["elo"]
+        + basic_stats.predict_btts(home_form, away_form) * WEIGHTS["elo"]
     )
 
     over_25 = (

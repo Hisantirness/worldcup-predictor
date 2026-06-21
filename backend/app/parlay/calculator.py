@@ -46,7 +46,7 @@ def calculate_single_parlay(selections: list[dict]) -> dict:
         "selections": details,
         "combined_probability": round(combined_prob * 100, 2),
         "expected_value": round(total_expected_value / len(selections) * 100, 1) if details else 0,
-        "risk_level": _get_risk_level(combined_prob),
+        "risk_level": _get_risk_level(combined_prob * 100),
     }
 
 
@@ -93,7 +93,7 @@ def get_safest_parlays(matches: list[dict], max_picks: int = 3, min_prob: float 
                 "parlay_size": n,
                 "selections": [s["match"] + " → " + {"1": "Local", "X": "Empate", "2": "Visitante"}[s["pick"]] for s in combo],
                 "combined_probability": round(combined_prob * 100, 2),
-                "risk": _get_risk_level(combined_prob),
+                "risk": _get_risk_level(combined_prob * 100),
             })
 
     suggestions.sort(key=lambda x: x["combined_probability"], reverse=True)
