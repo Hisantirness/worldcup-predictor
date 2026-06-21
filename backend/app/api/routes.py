@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from ..data_collector.collector import get_matches, get_recent_form, get_team_info, SAMPLE_MATCHES
+from ..data_collector.collector import get_matches, get_recent_form, get_team_info, get_all_teams
 from ..models.ensemble import predict_match, get_feature_importance
 from ..parlay.calculator import calculate_single_parlay, get_safest_parlays
 
@@ -9,16 +9,19 @@ router = APIRouter()
 @router.get("/matches")
 async def matches():
     data = await get_matches()
+    teams = await get_all_teams()
     enriched = []
     for m in data:
-        home_info = get_team_info(m["home"])
-        away_info = get_team_info(m["away"])
+        home_info = teams.get(m["home"], get_team_info(m["home"]))
+        away_info = teams.get(m["away"], get_team_info(m["away"]))
         enriched.append({
             **m,
             "home_rank": home_info["rank"],
             "away_rank": away_info["rank"],
-            "home_group": home_info["group"],
-            "away_group": away_info["group"],
+            "home_group": home_info.get("group", home_info.get("group", "?")),
+            "away_group": away_info.get("group", away_info.get("group", "?")),
+            "home_flag": home_info.get("flag", ""),
+            "away_flag": away_info.get("flag", ""),
         })
     return {"matches": enriched}
 
