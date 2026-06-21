@@ -14,9 +14,15 @@
                 <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
                 <button class="nav-btn" data-tab="parlay">Parlay Builder</button>
                 <button class="nav-btn" data-tab="safest">Picks Seguros</button>
+                <button class="nav-btn" data-tab="models">Modelos</button>
             </div>
         </div>
     </nav>
+
+    <div id="connectionBanner" class="connection-banner error" style="display:none">
+        ⚠ Error de conexión — verifica que el backend esté corriendo
+        <button onclick="checkConnection()">Reintentar</button>
+    </div>
 
     <main class="container">
         <section id="tab-dashboard" class="tab-content active">
@@ -34,6 +40,7 @@
                     <option value="G">Grupo G</option>
                     <option value="H">Grupo H</option>
                 </select>
+                <button id="refreshBtn" class="btn-icon" title="Actualizar">⟳</button>
             </div>
             <div id="matchesContainer" class="matches-grid">
                 <div class="loading">Cargando partidos...</div>
@@ -42,22 +49,61 @@
 
         <section id="tab-parlay" class="tab-content">
             <h2>Constructor de Parlays</h2>
-            <p class="section-desc">Selecciona tus picks y calcula la probabilidad combinada.</p>
-            <div id="parlayBuilder">
-                <div id="parlaySelections"></div>
+            <p class="section-desc">Selecciona partidos y picks para calcular la probabilidad combinada.</p>
+            <div class="parlay-controls">
                 <button id="addSelectionBtn" class="btn-secondary">+ Agregar selección</button>
-                <div id="parlayResult" class="result-card" style="display:none;">
-                    <h3>Resultado del Parlay</h3>
-                    <div id="parlayResultContent"></div>
-                </div>
+                <button id="calculateParlayBtn" class="btn-primary" style="display:none">Calcular Parlay</button>
             </div>
+            <div id="parlaySelections"></div>
+            <div id="parlayEmpty" class="empty-state">
+                <p>Agrega al menos 2 selecciones para calcular un parlay</p>
+            </div>
+            <div id="parlayResult" class="result-card" style="display:none;"></div>
         </section>
 
         <section id="tab-safest" class="tab-content">
             <h2>Picks Más Seguros</h2>
             <p class="section-desc">Combinaciones recomendadas con mayor probabilidad de acierto.</p>
+            <div class="filters">
+                <select id="safestSizeFilter" class="filter-select">
+                    <option value="1">Individuales</option>
+                    <option value="2" selected>Dobles</option>
+                    <option value="3">Triples</option>
+                </select>
+            </div>
             <div id="safestContainer">
-                <div class="loading">Calculando picks seguros...</div>
+                <div class="loading">Calculando combinaciones...</div>
+            </div>
+        </section>
+
+        <section id="tab-models" class="tab-content">
+            <h2>Modelos de Predicción</h2>
+            <p class="section-desc">Información sobre los 4 modelos activos y su importancia en las predicciones.</p>
+            <div class="models-grid">
+                <div class="model-card">
+                    <h3>📊 Basic Stats</h3>
+                    <span class="model-weight">Peso: 20%</span>
+                    <p>Analiza forma reciente, ranking FIFA, goles promedio y enfrentamientos directos.</p>
+                </div>
+                <div class="model-card">
+                    <h3>📈 Poisson</h3>
+                    <span class="model-weight">Peso: 30%</span>
+                    <p>Distribución de Poisson para predecir goles esperados y probabilidades de resultado.</p>
+                </div>
+                <div class="model-card">
+                    <h3>⚖️ Elo</h3>
+                    <span class="model-weight">Peso: 25%</span>
+                    <p>Sistema de rating dinámico que se actualiza con cada partido jugado.</p>
+                </div>
+                <div class="model-card">
+                    <h3>🤖 Random Forest</h3>
+                    <span class="model-weight">Peso: 25%</span>
+                    <p>ML con 15 features: ranking, goles, forma. Entrenado con datos sintéticos de 2000 muestras.</p>
+                </div>
+            </div>
+            <div id="featureImportance">
+                <h3>Importancia de Features (Random Forest)</h3>
+                <div class="loading">Cargando importancia de features...</div>
             </div>
         </section>
     </main>

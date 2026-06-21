@@ -1,52 +1,84 @@
 const API_BASE = "http://localhost:8000/api/v1";
 
 const state = {
-    matches: [],
     predictions: [],
-    selections: [],
-    safest: [],
+    parlaySelections: [],
+    connected: false,
 };
 
 document.addEventListener("DOMContentLoaded", () => {
     initNavigation();
     loadDashboard();
     initParlayBuilder();
+    loadFeatureImportance();
+
+    document.getElementById("refreshBtn").addEventListener("click", loadDashboard);
+    document.getElementById("safestSizeFilter").addEventListener("change", loadSafestParlays);
 });
+
+// ─────────── CONNECTION ───────────
+
+async function checkConnection() {
+    const banner = document.getElementById("connectionBanner");
+    try {
+        const res = await fetch(`${API_BASE}/matches`);
+        if (res.ok) {
+            banner.style.display = "none";
+            state.connected = true;
+            loadDashboard();
+            return true;
+        }
+    } catch {
+        banner.style.display = "flex";
+        state.connected = false;
+    }
+    return false;
+}
+
+async function fetchAPI(endpoint, options = {}) {
+    try {
+        const res = await fetch(`${API_BASE}${endpoint}`, {
+            headers: { "Content-Type": "application/json" },
+            ...options,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        state.connected = true;
+        document.getElementById("connectionBanner").style.display = "none";
+        return await res.json();
+    } catch (err) {
+        console.error(`API error (${endpoint}):`, err);
+        if (!state.connected) {
+            document.getElementById("connectionBanner").style.display = "flex";
+        }
+        return null;
+    }
+}
+
+// ─────────── NAVIGATION ───────────
 
 function initNavigation() {
     document.querySelectorAll(".nav-btn").forEach(btn => {
         btn.addEventListener("click", () => {
-            document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-            document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".nav-btn, .tab-content").forEach(el => el.classList.remove("active"));
             btn.classList.add("active");
             document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
-
-            if (btn.dataset.tab === "safest") loadSafestParlays();
-            if (btn.dataset.tab === "dashboard") loadDashboard();
+            const tab = btn.dataset.tab;
+            if (tab === "safest") loadSafestParlays();
+            if (tab === "models") loadFeatureImportance();
+            if (tab === "dashboard") loadDashboard();
         });
     });
-}
-
-async function fetchAPI(endpoint) {
-    try {
-        const res = await fetch(`${API_BASE}${endpoint}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-    } catch (err) {
-        console.error(`API error (${endpoint}):`, err);
-        return null;
-    }
 }
 
 // ─────────── DASHBOARD ───────────
 
 async function loadDashboard() {
     const container = document.getElementById("matchesContainer");
-    container.innerHTML = '<div class="loading">Cargando partidos...</div>';
+    container.innerHTML = '<div class="loading">⟳ Cargando partidos...</div>';
 
     const data = await fetchAPI("/predictions");
-    if (!data || !data.predictions) {
-        container.innerHTML = '<div class="loading">Error al cargar datos. Asegúrate de que el backend esté corriendo en localhost:8000.</div>';
+    if (!data?.predictions) {
+        container.innerHTML = '<div class="loading">Error al cargar datos. Verifica que el backend esté corriendo en localhost:8000.</div>';
         return;
     }
 
@@ -60,7 +92,6 @@ async function loadDashboard() {
 function applyFilters() {
     const search = document.getElementById("searchInput").value.toLowerCase();
     const group = document.getElementById("groupFilter").value;
-
     let filtered = state.predictions;
     if (search) {
         filtered = filtered.filter(p =>
@@ -68,17 +99,14 @@ function applyFilters() {
             p.away_team.toLowerCase().includes(search)
         );
     }
-    if (group !== "all") {
-        filtered = filtered.filter(p => p.group === group);
-    }
+    if (group !== "all") filtered = filtered.filter(p => p.group === group);
     renderMatches(filtered);
 }
 
 function renderMatches(predictions) {
     const container = document.getElementById("matchesContainer");
-
-    if (predictions.length === 0) {
-        container.innerHTML = '<div class="loading">No se encontraron partidos.</div>';
+    if (!predictions.length) {
+        container.innerHTML = '<div class="empty-state">No se encontraron partidos.</div>';
         return;
     }
 
@@ -118,17 +146,17 @@ function renderMatches(predictions) {
             </div>
             <div class="match-stats">
                 <div class="stat-item">
-                    <span class="stat-label">BTTS (ambos anotan)</span>
+                    <span class="stat-label">BTTS</span>
                     <span class="stat-value">${p.btts_probability}%</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">Over 2.5 goles</span>
+                    <span class="stat-label">Over 2.5</span>
                     <span class="stat-value">${p.over_25_probability}%</span>
                 </div>
             </div>
             <div class="safest-pick ${confidenceClass(p.confidence)}">
-                <span>Pick más seguro: ${pickLabel(p.safest_pick)}</span>
-                <span class="pick-badge">${p.confidence}% confianza</span>
+                <span>Pick: ${pickLabel(p.safest_pick)}</span>
+                <span class="pick-badge">${p.confidence}%</span>
             </div>
         </div>
     `).join("");
@@ -147,28 +175,47 @@ function confidenceClass(conf) {
 // ─────────── PARLAY BUILDER ───────────
 
 function initParlayBuilder() {
-    addSelectionRow();
     document.getElementById("addSelectionBtn").addEventListener("click", addSelectionRow);
+    document.getElementById("calculateParlayBtn").addEventListener("click", calculateParlay);
 }
 
-function addSelectionRow() {
+async function getTeamOptions() {
+    const data = await fetchAPI("/matches");
+    if (!data?.matches) return [];
+    const teams = new Set();
+    data.matches.forEach(m => { teams.add(m.home); teams.add(m.away); });
+    return Array.from(teams).sort();
+}
+
+async function getMatchesForTeam(team) {
+    const data = await fetchAPI("/matches");
+    if (!data?.matches) return [];
+    return data.matches.filter(m => m.home === team || m.away === team);
+}
+
+let selectionCounter = 0;
+
+async function addSelectionRow() {
     const container = document.getElementById("parlaySelections");
-    const idx = state.selections.length;
+    const idx = selectionCounter++;
+    const teams = await getTeamOptions();
 
     const div = document.createElement("div");
     div.className = "selection-row";
     div.dataset.index = idx;
 
+    const teamOpts = teams.map(t => `<option value="${t}">${t}</option>`).join("");
+
     div.innerHTML = `
         <div class="field">
-            <label>Equipo Local</label>
-            <input type="text" class="parlay-home" placeholder="Ej: Argentina">
+            <label>Partido</label>
+            <select class="parlay-home">${teamOpts}</select>
         </div>
         <div class="field">
-            <label>Equipo Visitante</label>
-            <input type="text" class="parlay-away" placeholder="Ej: Brasil">
+            <label>vs</label>
+            <select class="parlay-away"><option value="">Seleccionar...</option></select>
         </div>
-        <div class="field">
+        <div class="field field-small">
             <label>Pick</label>
             <select class="parlay-pick">
                 <option value="1">1 - Local</option>
@@ -176,76 +223,112 @@ function addSelectionRow() {
                 <option value="2">2 - Visitante</option>
             </select>
         </div>
-        <div class="field">
-            <label>Cuota (opcional)</label>
-            <input type="number" class="parlay-odds" step="0.01" min="1.01" placeholder="Ej: 2.10">
+        <div class="field field-small">
+            <label>Cuota</label>
+            <input type="number" class="parlay-odds" step="0.01" min="1.01" placeholder="2.10">
         </div>
         <button class="remove-btn">✕</button>
     `;
 
+    const homeSelect = div.querySelector(".parlay-home");
+    const awaySelect = div.querySelector(".parlay-away");
+    const pickSelect = div.querySelector(".parlay-pick");
+    const oddsInput = div.querySelector(".parlay-odds");
+
+    homeSelect.addEventListener("change", async () => {
+        const matches = await getMatchesForTeam(homeSelect.value);
+        const opponents = matches.map(m => m.home === homeSelect.value ? m.away : m.home);
+        awaySelect.innerHTML = opponents.map(t => `<option value="${t}">${t}</option>`).join("");
+        if (opponents.length) awaySelect.value = opponents[0];
+        updateParlayState();
+    });
+
+    if (teams.length) {
+        homeSelect.value = teams[0];
+        const matches = await getMatchesForTeam(teams[0]);
+        const opponents = matches.map(m => m.home === teams[0] ? m.away : m.home);
+        awaySelect.innerHTML = opponents.map(t => `<option value="${t}">${t}</option>`).join("");
+        if (opponents.length) awaySelect.value = opponents[0];
+    }
+
+    div.querySelectorAll("select, input").forEach(el => {
+        el.addEventListener("change", updateParlayState);
+    });
+
     div.querySelector(".remove-btn").addEventListener("click", () => {
         div.remove();
-        state.selections = state.selections.filter((_, i) => i !== idx);
-        recalcParlay();
+        updateParlayState();
     });
 
     container.appendChild(div);
-
-    state.selections.push({
-        home: "",
-        away: "",
-        pick: "1",
-        odds: null,
-    });
-
-    const inputs = div.querySelectorAll("input, select");
-    inputs.forEach(input => {
-        input.addEventListener("input", () => {
-            const i = parseInt(div.dataset.index);
-            state.selections[i] = {
-                home: div.querySelector(".parlay-home").value,
-                away: div.querySelector(".parlay-away").value,
-                pick: div.querySelector(".parlay-pick").value,
-                odds: parseFloat(div.querySelector(".parlay-odds").value) || null,
-            };
-        });
-    });
-
-    document.getElementById("parlayResult").style.display = "none";
+    updateParlayState();
 }
 
-async function recalcParlay() {
-    const valid = state.selections.filter(s => s.home && s.away);
-    if (valid.length === 0) {
-        document.getElementById("parlayResult").style.display = "none";
-        return;
+function getValidSelections() {
+    const rows = document.querySelectorAll(".selection-row");
+    return Array.from(rows).map(row => ({
+        home: row.querySelector(".parlay-home")?.value || "",
+        away: row.querySelector(".parlay-away")?.value || "",
+        pick: row.querySelector(".parlay-pick")?.value || "1",
+        odds: parseFloat(row.querySelector(".parlay-odds")?.value) || null,
+    })).filter(s => s.home && s.away);
+}
+
+function updateParlayState() {
+    const valid = getValidSelections();
+    const btn = document.getElementById("calculateParlayBtn");
+    const empty = document.getElementById("parlayEmpty");
+    const result = document.getElementById("parlayResult");
+
+    if (valid.length >= 2) {
+        btn.style.display = "inline-block";
+        btn.disabled = false;
+        empty.style.display = "none";
+    } else if (valid.length > 0) {
+        btn.style.display = "inline-block";
+        btn.disabled = true;
+        btn.textContent = valid.length === 1 ? "Agrega 1 selección más" : "Calcular Parlay";
+        empty.style.display = "none";
+    } else {
+        btn.style.display = "none";
+        empty.style.display = "block";
     }
 
-    const data = await fetchAPI("/parlay/calculate");
-    if (data) {
-        state.lastParlayResult = data;
-        renderParlayResult(data);
-    }
+    if (valid.length < 2) return;
+    state.parlaySelections = valid;
 }
 
 async function calculateParlay() {
-    const valid = state.selections.filter(s => s.home && s.away);
-    if (valid.length < 2) {
-        alert("Agrega al menos 2 selecciones con equipos válidos.");
+    const selections = getValidSelections();
+    if (selections.length < 2) return;
+
+    const btn = document.getElementById("calculateParlayBtn");
+    btn.disabled = true;
+    btn.textContent = "Calculando...";
+
+    const data = await fetchAPI("/parlay/calculate", {
+        method: "POST",
+        body: JSON.stringify(selections),
+    });
+
+    btn.disabled = false;
+    btn.textContent = "Calcular Parlay";
+
+    if (!data) {
+        document.getElementById("parlayResult").style.display = "block";
+        document.getElementById("parlayResult").innerHTML = '<h3>Error al calcular</h3><p>Intenta de nuevo.</p>';
         return;
     }
 
-    const data = await fetchAPI("/parlay/calculate");
-    if (data) {
-        renderParlayResult(data);
-    }
+    renderParlayResult(data);
 }
 
 function renderParlayResult(data) {
-    const resultDiv = document.getElementById("parlayResult");
-    resultDiv.style.display = "block";
+    const div = document.getElementById("parlayResult");
+    div.style.display = "block";
 
-    document.getElementById("parlayResultContent").innerHTML = `
+    div.innerHTML = `
+        <h3>Resultado del Parlay</h3>
         <div class="parlay-result-grid">
             <div class="parlay-result-item">
                 <span>Probabilidad combinada</span>
@@ -253,15 +336,17 @@ function renderParlayResult(data) {
             </div>
             <div class="parlay-result-item">
                 <span>Valor Esperado (EV)</span>
-                <span style="font-weight:700">${data.expected_value > 0 ? "+" : ""}${data.expected_value}%</span>
+                <span style="font-weight:700;color:${data.expected_value > 0 ? "var(--accent-green)" : "var(--accent-red)"}">
+                    ${data.expected_value > 0 ? "+" : ""}${data.expected_value}%
+                </span>
             </div>
             <div class="parlay-result-item">
-                <span>Nivel de Riesgo</span>
+                <span>Riesgo</span>
                 <span class="risk-badge risk-${data.risk_level.toLowerCase().replace(" ", "-")}">${data.risk_level}</span>
             </div>
         </div>
         <div style="margin-top:1rem">
-            <h4 style="margin-bottom:0.5rem;font-size:0.9rem;color:var(--text-secondary)">Selecciones:</h4>
+            <h4 style="margin-bottom:0.5rem;font-size:0.85rem;color:var(--text-secondary)">Selecciones:</h4>
             ${data.selections.map(s => `
                 <div class="parlay-result-item">
                     <span>${s.match} → ${pickLabel(s.pick)}</span>
@@ -278,29 +363,61 @@ async function loadSafestParlays() {
     const container = document.getElementById("safestContainer");
     container.innerHTML = '<div class="loading">Calculando combinaciones seguras...</div>';
 
-    const data = await fetchAPI("/parlay/safest?max_picks=3&min_prob=45");
-    if (!data || !data.suggestions) {
-        container.innerHTML = '<div class="loading">No hay suficientes datos para sugerencias.</div>';
+    const size = parseInt(document.getElementById("safestSizeFilter").value);
+    const data = await fetchAPI(`/parlay/safest?max_picks=${size}&min_prob=40`);
+
+    if (!data?.suggestions?.length) {
+        container.innerHTML = '<div class="empty-state">No se encontraron combinaciones con suficiente probabilidad.</div>';
         return;
     }
 
-    if (data.suggestions.length === 0) {
-        container.innerHTML = '<div class="loading">No se encontraron picks con suficiente probabilidad.</div>';
+    const filtered = data.suggestions.filter(s => s.parlay_size === size);
+    const display = filtered.length ? filtered : data.suggestions.slice(0, 10);
+
+    container.innerHTML = display.map(s => {
+        const probColor = s.combined_probability >= 40 ? "var(--accent-green)"
+            : s.combined_probability >= 25 ? "var(--accent-yellow)"
+            : "var(--accent-red)";
+        return `
+            <div class="suggestion-card">
+                <span class="size-badge">${s.parlay_size} selección(es)</span>
+                <ul>
+                    ${s.selections.map(sel => `<li>${sel}</li>`).join("")}
+                </ul>
+                <div class="prob-display" style="color:${probColor}">
+                    ${s.combined_probability}% probabilidad
+                </div>
+                <span class="risk-badge risk-${s.risk.toLowerCase().replace(" ", "-")}" style="margin-top:0.4rem;display:inline-block">
+                    Riesgo: ${s.risk}
+                </span>
+            </div>
+        `;
+    }).join("");
+}
+
+// ─────────── FEATURE IMPORTANCE ───────────
+
+async function loadFeatureImportance() {
+    const container = document.getElementById("featureImportance");
+    container.innerHTML = '<h3 style="margin-bottom:0.75rem">Importancia de Features (Random Forest)</h3><div class="loading">Cargando...</div>';
+
+    const data = await fetchAPI("/model/feature-importance");
+    if (!data?.features?.length) {
+        container.innerHTML += '<div class="empty-state">No disponible.</div>';
         return;
     }
 
-    container.innerHTML = data.suggestions.map((s, i) => `
-        <div class="suggestion-card">
-            <span class="size-badge">${s.parlay_size} selección(es)</span>
-            <ul>
-                ${s.selections.map(sel => `<li>${sel}</li>`).join("")}
-            </ul>
-            <div class="prob-display" style="color:${s.combined_probability >= 40 ? "var(--accent-green)" : s.combined_probability >= 25 ? "var(--accent-yellow)" : "var(--accent-red)"}">
-                ${s.combined_probability}% probabilidad
+    const maxImp = data.features[0].importance;
+    container.innerHTML = '<h3 style="margin-bottom:0.85rem">Importancia de Features (Random Forest)</h3>' +
+        data.features.map(f => `
+            <div class="feature-bar-container">
+                <div class="feature-bar-label">
+                    <span>${f.feature}</span>
+                    <span>${(f.importance * 100).toFixed(1)}%</span>
+                </div>
+                <div class="feature-bar">
+                    <div class="feature-bar-fill" style="width:${(f.importance / maxImp) * 100}%"></div>
+                </div>
             </div>
-            <div class="risk-badge risk-${s.risk.toLowerCase().replace(" ", "-")}" style="margin-top:0.5rem">
-                Riesgo: ${s.risk}
-            </div>
-        </div>
-    `).join("");
+        `).join("");
 }
